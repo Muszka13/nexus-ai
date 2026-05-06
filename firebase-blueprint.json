@@ -1,0 +1,38 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Stores user balance and settings.",
+      "type": "object",
+      "properties": {
+        "balance": { "type": "number", "description": "Current theoretical balance in project units (ETH/SOL)." },
+        "walletAddress": { "type": "string", "description": "Connected wallet address." },
+        "walletProvider": { "type": "string", "description": "ID of the wallet provider (metamask, phantom, etc.)." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp of last update." }
+      },
+      "required": ["balance", "updatedAt"]
+    },
+    "Transaction": {
+      "title": "Transaction record",
+      "description": "Records of arbitrage, gas, or stake events.",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["ARB", "GAS", "WITHDRAW", "STAKE", "DEPOSIT"], "description": "Action type." },
+        "amount": { "type": "number", "description": "Value change." },
+        "token": { "type": "string", "description": "Asset symbol." },
+        "timestamp": { "type": "string", "format": "date-time", "description": "Server timestamp of event." }
+      },
+      "required": ["type", "amount", "token", "timestamp"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Primary user document."
+    },
+    "users/{userId}/transactions/{txId}": {
+      "schema": "Transaction",
+      "description": "Transactional history for the specific user."
+    }
+  }
+}

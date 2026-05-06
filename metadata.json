@@ -1,0 +1,6 @@
+{
+  "name": "NexusTrade AI",
+  "description": "An advanced hybrid crypto trading terminal separating CEX and DEX markets, featuring Arbitrage Scanning, Flash Loan simulation, and an AI-driven market overseer.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

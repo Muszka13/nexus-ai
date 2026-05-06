@@ -1,0 +1,61 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default Deny Catch-All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helper Primitives ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // 1. User Profiles
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUserProfile(request.resource.data);
+      allow update: if isOwner(userId) 
+                    && isValidUserProfile(request.resource.data)
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['balance', 'walletAddress', 'walletProvider', 'updatedAt']);
+
+      function isValidUserProfile(data) {
+        return data.balance is number 
+          && data.updatedAt == request.time
+          && (data.get('walletAddress', null) == null || (data.walletAddress is string && data.walletAddress.size() < 256))
+          && (data.get('walletProvider', null) == null || (data.walletProvider is string && data.walletProvider.size() < 64))
+          && data.keys().hasAll(['balance', 'updatedAt'])
+          && data.keys().size() <= 4;
+      }
+
+      // 2. User Transactions (Subcollection Pattern)
+      match /transactions/{txId} {
+        // Enforce secure list queries. 
+        // Note: userId is inherited from the parent match.
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidTransaction(request.resource.data);
+        
+        // Transaction safety: No edits or deletes allowed to maintain audit trail.
+        allow update, delete: if false;
+
+        function isValidTransaction(data) {
+          return data.type in ['ARB', 'GAS', 'WITHDRAW', 'STAKE', 'DEPOSIT']
+            && data.amount is number
+            && data.token is string && data.token.size() < 16
+            && data.timestamp == request.time
+            && data.keys().hasAll(['type', 'amount', 'token', 'timestamp'])
+            && data.keys().size() == 4;
+        }
+      }
+    }
+  }
+}
