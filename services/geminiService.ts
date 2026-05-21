@@ -62,9 +62,9 @@ export const generateAiResponse = async (
     const isDeepAudit = /audit|verify|check|calculate|risk|mev|liquidity|math|complex|strategy|solidity|contract|security|optimize|flash|loan|gas|missing|why|fail/i.test(lowerPrompt);
 
     // STRATEGY: 
-    // 1. Complex/Audit -> Gemini 1.5 Pro (High reasoning)
-    // 2. Chat/UI -> Gemini 1.5 Flash (Low latency, High throughput)
-    const modelName = isDeepAudit ? 'gemini-1.5-pro' : 'gemini-1.5-flash'; 
+    // 1. Complex/Audit -> Gemini 3.1 Pro (High reasoning)
+    // 2. Chat/UI -> Gemini 3 Flash (Low latency, High throughput)
+    const modelName = isDeepAudit ? 'gemini-3.1-pro-preview' : 'gemini-3-flash-preview'; 
     
     const config: any = { 
       tools: [{ googleSearch: {} }],
@@ -110,7 +110,7 @@ export const generateAiResponse = async (
       if (isDeepAudit && (error.status === 429 || error.message?.includes('429'))) {
         console.warn("[Nexus Neural Uplink] Pro model quota reached. Falling back to Flash...");
         response = await retryWithBackoff(() => ai.models.generateContent({
-          model: 'gemini-1.5-flash',
+          model: 'gemini-3-flash-preview',
           contents: fullPrompt,
           config: { ...config, thinkingConfig: undefined } // Remove thinking for non-pro models
         }));
@@ -181,12 +181,12 @@ export const auditSmartContract = async (code: string): Promise<AuditResult> => 
 
   try {
     // Primary execution with Flash
-    return await executeAudit('gemini-1.5-flash');
+    return await executeAudit('gemini-3-flash-preview');
   } catch (error: any) {
     console.warn("Primary Audit failed, attempting lite fallback...", error);
     try {
       // Secondary execution with Flash
-      return await executeAudit('gemini-1.5-flash');
+      return await executeAudit('gemini-3.1-flash-lite-preview');
     } catch (fallbackError: any) {
       console.error("Deep Thought Audit Failed completely:", fallbackError);
       
@@ -241,7 +241,7 @@ export const getNeuralOptimization = async (
 
   try {
     // Primary: Flash
-    return await executeOpt('gemini-1.5-flash');
+    return await executeOpt('gemini-3-flash-preview');
   } catch (error: any) {
     console.warn("Primary Neural Opt failed, attempting lite fallback...", error);
     
@@ -257,7 +257,7 @@ export const getNeuralOptimization = async (
 
     try {
       // Secondary: Flash
-      return await executeOpt('gemini-1.5-flash');
+      return await executeOpt('gemini-3.1-flash-lite-preview');
     } catch (fallbackError: any) {
       console.error("Neural Opt Failed completely:", fallbackError);
       

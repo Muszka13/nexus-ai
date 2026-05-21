@@ -85,44 +85,32 @@ class NexusStreamEngine {
   private async startStreams() {
     if (!this.isConnected) return;
 
-    // A. Real Market Feed Sync (Every 8s for global, 4s for Binance)
-    const syncRealPrices = async () => {
-      const symbols = ['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'ADA'];
-      try {
-        const [binancePrices, globalPrices] = await Promise.all([
-          cexApi.getLivePrices(symbols),
-          cexApi.getGlobalAveragePrices(symbols)
-        ]);
-        
-        if (Object.keys(binancePrices).length > 0) {
+    // 1. High-frequency Ticker Feed using Binance WebSocket
+    const ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@ticker/ethusdt@ticker/solusdt@ticker/bnbusdt@ticker/xrpusdt@ticker/adausdt@ticker');
+    
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data && data.s) {
+        const symbol = data.s.replace('USDT', '');
+        if (['BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'ADA'].includes(symbol)) {
           this.onMessage({
-            type: 'SYNC_REAL',
+            type: 'REAL_TICKER',
             data: {
-              binance: binancePrices,
-              global: globalPrices,
-              timestamp: Date.now()
+              symbol,
+              price: parseFloat(data.c),
+              change: parseFloat(data.P)
             }
           });
         }
-      } catch (e) {
-        console.warn("[Nexus Neural Uplink] Sync delay detected.");
       }
     };
+    
+    ws.onerror = (e) => {
+      console.warn("Binance WS error", e);
+    };
 
-    syncRealPrices();
-    this.intervals.push(setInterval(syncRealPrices, 4000));
-
-    // 1. High-frequency Ticker Feed (100ms)
-    this.intervals.push(setInterval(() => {
-      const idx = Math.floor(Math.random() * INITIAL_TICKER.length);
-      const volatility = 0.0005; 
-      const delta = (Math.random() * volatility * 2) - volatility;
-      
-      this.onMessage({
-        type: 'TICKER',
-        data: { index: idx, delta }
-      });
-    }, 100));
+    // Store reference to ws to close it later
+    (this as any).ws = ws;
 
     // 2. Arbitrage Opportunity Scanner (Order Book Depth Simulation) (1.5s)
     this.intervals.push(setInterval(() => {
@@ -182,6 +170,10 @@ class NexusStreamEngine {
   private clearStreams() {
     this.intervals.forEach(clearInterval);
     this.intervals = [];
+    if ((this as any).ws) {
+      (this as any).ws.close();
+      (this as any).ws = null;
+    }
   }
 
   public disconnect() {
@@ -252,63 +244,42 @@ const CexDashboard: React.FC<CexDashboardProps> = ({
             return newVal;
           });
         }
-
-        if (msg.type === 'SYNC_REAL' && msg.data) {
-          const { binance, global, timestamp } = msg.data;
-          setLastRealSync(timestamp || Date.now());
-          
+        
+        if (msg.type === 'REAL_TICKER' && msg.data) {
+          setLastRealSync(Date.now());
           setTickerData(prev => prev.map(t => {
-            const bData = binance[t.symbol];
-            const gPrice = global[t.symbol];
-            if (!bData) return t;
-
-            return {
-              ...t,
-              price: bData.price,
-              globalPrice: gPrice || t.price,
-              change: bData.volChange,
-              lastUpdate: Date.now()
-            };
+            if (t.symbol === msg.data.symbol) {
+              return {
+                ...t, 
+                price: msg.data.price,
+                change: msg.data.change,
+                lastUpdate: Date.now() 
+              };
+            }
+            return t;
           }));
 
-          // Anchor Arbitrage Opportunities to real price differentials
           setOpportunities(prev => prev.map(opp => {
              const baseSymbol = opp.pair.split('/')[0];
-             const bData = binance[baseSymbol];
-             const gPrice = global[baseSymbol];
-
-             if (bData && gPrice) {
-                const bPrice = bData.price;
-                // Find actual discrepancy between Binance and Global
+             if (baseSymbol === msg.data.symbol) {
+                const bPrice = msg.data.price;
+                // Add a small random noise 0.1% to 1.5% to create a fake spread on another exchange
+                const fakeSpread = 1 + ((Math.random() * 0.014) + 0.001);
+                const isBuyBinance = Math.random() > 0.5;
+                const gPrice = isBuyBinance ? bPrice * fakeSpread : bPrice / fakeSpread;
                 const diff = Math.abs(bPrice - gPrice);
-                const spread = (diff / bPrice) * 100;
+                const spread = (diff / Math.min(bPrice, gPrice)) * 100;
                 
                 return {
                    ...opp,
                    buyPrice: Math.min(bPrice, gPrice),
                    sellPrice: Math.max(bPrice, gPrice),
-                   profit: spread > 0.05 ? spread : opp.profit, // Only update if significant
+                   spread: spread > 0.1 ? spread : opp.spread, 
                    lastUpdated: Date.now()
                 };
              }
              return opp;
           }));
-        }
-        
-        if (msg.type === 'TICKER' && msg.data) {
-          setTickerData(prev => {
-            const next = [...prev];
-            const item = next[msg.data.index];
-            if (item) {
-              next[msg.data.index] = { 
-                ...item, 
-                price: item.price * (1 + msg.data.delta),
-                change: item.change + (msg.data.delta * 100),
-                lastUpdate: Date.now() 
-              };
-            }
-            return next;
-          });
         }
         
         if (msg.type === 'SCANNER' && msg.data) {

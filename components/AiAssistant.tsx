@@ -193,7 +193,7 @@ const AiAssistant: React.FC<AiAssistantProps> = ({ currentContext }) => {
                 {autoPilot && <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-1 rounded border border-emerald-500/30">AUTO</span>}
             </h3>
             <p className="text-[10px] text-purple-300 flex items-center gap-1">
-              <Sparkles className="w-3 h-3" /> Gemini 1.5 Pro
+              <Sparkles className="w-3 h-3" /> Gemini 3.1 Pro
             </p>
           </div>
         </div>

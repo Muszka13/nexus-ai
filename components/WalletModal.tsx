@@ -198,6 +198,41 @@ const WalletModal: React.FC<WalletModalProps> = ({
         )}
         
         <div className="flex-1 overflow-y-auto p-8 custom-scrollbar relative z-10">
+          {localError && (
+            <div className="mb-6 p-6 rounded-[2rem] border border-rose-500/30 bg-rose-500/5 backdrop-blur-xl flex flex-col gap-5 animate-in fade-in slide-in-from-top-6 duration-500">
+              <div className="flex gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-rose-500/20 flex items-center justify-center shrink-0">
+                  <ShieldAlert className="text-rose-500 w-7 h-7" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm font-black text-white uppercase tracking-tight">Security Handshake Interrupted</span>
+                  <p className="text-xs font-medium text-rose-200/80 leading-relaxed">{localError}</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+                {window.self !== window.top && (
+                  <button 
+                    onClick={() => window.open(window.location.href, '_blank')} 
+                    className="py-3 px-5 bg-rose-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.1em] flex items-center justify-center gap-2 hover:bg-rose-600 transition-all shadow-lg shadow-rose-500/20 active:scale-95"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    Open in New Tab
+                  </button>
+                )}
+                <button 
+                  onClick={() => {
+                    onConnect({ id: 'sim_metamask', name: 'Secure Neural Link', icon: 'https://picsum.photos/30/30?random=11', connected: false });
+                    setLocalError(null);
+                  }} 
+                  className="py-3 px-5 bg-primary text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.1em] flex items-center justify-center gap-2 hover:bg-primary/80 transition-all active:scale-95 shadow-lg shadow-primary/20"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Neural Fallback (Simulation)
+                </button>
+              </div>
+            </div>
+          )}
           {isValidating ? (
             <div className="py-16 flex flex-col items-center justify-center space-y-10">
               <div className="relative">

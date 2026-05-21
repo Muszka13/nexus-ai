@@ -40,8 +40,10 @@ export async function loginWithGoogle() {
   try {
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;
-  } catch (error) {
-    console.error("Login failed:", error);
+  } catch (error: any) {
+    if (error?.code !== 'auth/popup-closed-by-user' && !String(error).includes('popup-closed-by-user')) {
+      console.error("Login failed:", error);
+    }
     throw error;
   }
 }
