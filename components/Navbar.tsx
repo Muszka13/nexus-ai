@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutGrid, Network, Wallet as WalletIcon, ChevronDown, Activity, Wifi, WifiOff, BrainCircuit, ShieldCheck, ShieldAlert, Cloud, CloudOff, LogIn, LogOut } from 'lucide-react';
+import { LayoutGrid, Network, Wallet as WalletIcon, ChevronDown, Activity, Wifi, WifiOff, BrainCircuit, ShieldCheck, ShieldAlert, Cloud, CloudOff, LogIn, LogOut, Settings } from 'lucide-react';
 import { Wallet } from '../types';
 
 interface NavbarProps {
@@ -12,6 +12,7 @@ interface NavbarProps {
   isSyncing: boolean;
   onLogin: () => void;
   onLogout: () => void;
+  onSettingsClick: () => void;
 }
 
 const Navbar: React.FC<NavbarProps> = ({ 
@@ -23,7 +24,8 @@ const Navbar: React.FC<NavbarProps> = ({
   user,
   isSyncing,
   onLogin,
-  onLogout
+  onLogout,
+  onSettingsClick
 }) => {
   const [whaleAlert, setWhaleAlert] = useState<{ symbol: string; amount: string; side: 'BUY' | 'SELL' } | null>(null);
 
@@ -161,6 +163,14 @@ const Navbar: React.FC<NavbarProps> = ({
              <LogOut className="w-4 h-4" />
            </button>
         )}
+
+        <button 
+            onClick={onSettingsClick}
+            className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
+            title="Production Settings"
+        >
+            <Settings className="w-4 h-4" />
+        </button>
 
         <button 
             onClick={onConnectClick}

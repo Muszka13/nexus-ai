@@ -8,7 +8,7 @@ import {
   Scale, Lock, AlertTriangle, X, Sliders, PlayCircle, PauseCircle
 } from 'lucide-react';
 import { INITIAL_ARB_OPPS } from '../constants';
-import { ArbitrageOpportunity, OptimizationResult } from '../types';
+import { ArbitrageOpportunity, OptimizationResult, Wallet } from '../types';
 import { 
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, 
   Area, AreaChart, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis 
@@ -187,12 +187,14 @@ interface CexDashboardProps {
   portfolioBalance: number;
   onTradeSuccess: (amount: number, type: 'ARB' | 'GAS', token: string) => Promise<void>;
   transactions: any[];
+  activeWallet?: (Wallet & { isValidated?: boolean }) | null;
 }
 
 const CexDashboard: React.FC<CexDashboardProps> = ({ 
   portfolioBalance, 
   onTradeSuccess,
-  transactions
+  transactions,
+  activeWallet
 }) => {
   const [opportunities, setOpportunities] = useState<ExtendedOpportunity[]>(
     INITIAL_ARB_OPPS.map(o => ({ 
@@ -492,6 +494,59 @@ const CexDashboard: React.FC<CexDashboardProps> = ({
           ))}
         </div>
       </div>
+
+      {/* Neural Bridge Status */}
+      {activeWallet && (
+        <div className="bg-slate-900/50 border border-slate-800/80 rounded-[2rem] p-6 flex flex-col md:flex-row items-center justify-between gap-6 backdrop-blur-md animate-in fade-in slide-in-from-top-4 duration-500">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center relative">
+              <span className="flex h-3 w-3 absolute -top-1 -right-1">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+              </span>
+              <img src={activeWallet.icon} alt={activeWallet.name} className="w-7 h-7 object-contain" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-slate-500 font-extrabold uppercase tracking-widest">Neural Wallet Bridge</span>
+                {activeWallet.id.startsWith('sim_') ? (
+                  <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-[9px] font-black text-emerald-400 uppercase tracking-widest font-mono">
+                    ACTIVE_SIM_UPLINK
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-md bg-purple-500/10 border border-purple-500/30 text-[9px] font-black text-purple-400 uppercase tracking-widest font-mono">
+                    MAINNET_UPLINK (SAFE MODE)
+                  </span>
+                )}
+                {activeWallet.id.includes('metamask') && (
+                  <span className={`px-2 py-0.5 rounded-md border text-[9px] font-black uppercase tracking-widest font-mono ${activeWallet.id.startsWith('sim_') ? 'bg-purple-500/10 border-purple-500/30 text-purple-400' : 'bg-blue-500/10 border-blue-500/30 text-blue-400'}`}>
+                    {activeWallet.id.startsWith('sim_') ? 'METAMASK_SIM' : 'WEB3_INJECTED'}
+                  </span>
+                )}
+              </div>
+              <p className="text-sm font-black text-white mt-1">
+                Connected: <span className="text-primary italic">{activeWallet.name}</span> ➔ Settlements routed through <span className="text-indigo-400 font-mono text-xs">{activeWallet.address}</span>
+              </p>
+              <p className="text-[10px] text-slate-400 font-medium">
+                {activeWallet.id.startsWith('sim_') 
+                  ? "Simulated Sandbox activated. All profits and liquidations are fully synchronized with the local neural ledger." 
+                  : "Live Mainnet context detected. Operating in safe read-only API mode. Trades are routed via Web3 injected signatures." } 
+                Current balance: <span className="text-emerald-400 font-bold font-mono text-[11px] bg-slate-950 py-0.5 px-2 rounded-md border border-slate-850 ml-1">{activeWallet.balance}</span>
+              </p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-3 bg-slate-950/70 py-2.5 px-4 rounded-2xl border border-slate-800 shrink-0">
+            <div className={`w-2.5 h-2.5 rounded-full animate-pulse shadow-[0_0_10px_] ${activeWallet.id.startsWith('sim_') ? 'bg-emerald-500 shadow-emerald-500' : 'bg-rose-500 shadow-rose-500'}`} />
+            <div className="flex flex-col text-left">
+              <span className="text-[8px] text-slate-600 font-black uppercase tracking-widest">Active Feed</span>
+              <span className={`text-[10px] font-black font-mono uppercase tracking-widest ${activeWallet.id.startsWith('sim_') ? 'text-white' : 'text-rose-400'}`}>
+                {activeWallet.id.startsWith('sim_') ? 'BINANCE SIMULATOR' : 'BINANCE API (LIVE/READ)'}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-8 space-y-8">
@@ -1092,12 +1147,17 @@ const CexDashboard: React.FC<CexDashboardProps> = ({
               </div>
               <div className="space-y-4">
                  {history.slice(0, 5).map((h, i) => (
-                   <div key={i} className="flex justify-between items-center py-3 border-t border-slate-800/50 group/item">
-                      <div className="flex flex-col">
+                   <div key={i} className="flex justify-between items-center py-3 border-t border-slate-800/50 group/item text-left">
+                      <div className="flex flex-col text-left">
                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{h.buyLeg.exchange} ➔ {h.sellLeg.exchange}</span>
                         <span className="text-[8px] text-slate-600 font-bold uppercase">{new Date(h.timestamp).toLocaleTimeString()}</span>
+                        {activeWallet && (
+                          <span className="text-[7.5px] text-emerald-500 font-black uppercase tracking-widest mt-0.5 flex items-center gap-1">
+                            ✓ Settled to {activeWallet.name} [SIM]
+                          </span>
+                        )}
                       </div>
-                      <span className="text-sm font-mono text-emerald-400 font-black group-hover/item:scale-110 transition-transform">+${h.netProfit.toFixed(2)}</span>
+                      <span className="text-sm font-mono text-emerald-400 font-black group-hover/item:scale-110 transition-transform text-right">+${h.netProfit.toFixed(2)}</span>
                    </div>
                  ))}
                  {history.length === 0 && (

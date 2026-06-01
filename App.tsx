@@ -4,6 +4,7 @@ import Navbar from './components/Navbar';
 import CexDashboard from './components/CexDashboard';
 import DexDashboard from './components/DexDashboard';
 import WalletModal from './components/WalletModal';
+import LiveSettingsModal from './components/LiveSettingsModal';
 import { Wallet } from './types';
 import { BrowserProvider, formatEther } from 'ethers';
 import { WALLETS } from './constants';
@@ -14,6 +15,7 @@ import { ShieldAlert } from 'lucide-react';
 const App: React.FC = () => {
   const [activeView, setActiveView] = useState<'CEX' | 'DEX'>('CEX');
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [activeWallet, setActiveWallet] = useState<(Wallet & { isValidated?: boolean }) | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [isValidating, setIsValidating] = useState(false);
@@ -152,10 +154,60 @@ const App: React.FC = () => {
   };
 
   const handleWithdraw = async () => {
-    if (portfolioBalance <= 0 || !user) return;
+    if (portfolioBalance <= 0) {
+      // Use something else instead of alert if possible, or just set it
+      // but let's at least try a custom modal or just return for now
+      return;
+    }
     
+    // Instead of confirm, we just simulate withdrawal right away to avoid iframe block
+    const isContractDeployed = localStorage.getItem('nexus_contract_deployed') === 'true';
+    const appMode = localStorage.getItem('nexus_app_mode') || 'SIMULATION';
+    const isSimMode = activeWallet?.id.startsWith('sim_') || appMode === 'SIMULATION';
+    
+    if (!isSimMode && !isContractDeployed) {
+      // Not deployed in live mode - can't withdraw
+      setConnectionError("BŁĄD: Główny Smart Contract nie został jeszcze wdrożony. Przejdź do 'Production Settings' (koło zębate).");
+      setIsWalletModalOpen(true);
+      return;
+    }
+
+    if (!isSimMode && activeWallet?.id === 'metamask' && (window as any).ethereum) {
+      try {
+        const provider = new BrowserProvider((window as any).ethereum);
+        const signer = await provider.getSigner();
+        
+        // Prawdziwa interakcja Web3: Prośba o podpis (Personal Sign) w celu wypłaty
+        // W prawdziwym środowisku ten podpis autoryzowałby żądanie na backendzie
+        const message = `Platforma Nexus AI\n\nWypłata kapitału: ${portfolioBalance.toFixed(4)} ETH\nAdres docelowy: ${activeWallet.address}\nZlecenie: WITHDRAW_TO_EXTERNAL\nNonce: ${Math.floor(Date.now() / 1000)}`;
+        await signer.signMessage(message);
+        
+      } catch (err) {
+        console.error("Transakcja odrzucona przez użytkownika:", err);
+        setConnectionError("Użytkownik odrzucił żądanie podpisu. Wypłata anulowana.");
+        setIsWalletModalOpen(true);
+        return; // Zatrzymujemy wypłatę jeśli user odrzucił
+      }
+    }
+
     const amount = portfolioBalance;
     const unit = activeWallet?.id === 'phantom' ? 'SOL' : 'ETH';
+    
+    if (!user) {
+      // Local fallback for users not logged in via Firebase
+      setPortfolioBalance(0);
+      setTransactions(prev => [{
+        id: Math.random().toString(36).substring(7),
+        type: 'WITHDRAW',
+        amount: -amount,
+        token: unit,
+        time: new Date().toLocaleTimeString()
+      }, ...prev]);
+      
+      // Close modal to show action happened
+      setIsWalletModalOpen(false);
+      return;
+    }
     
     try {
       const userDocRef = doc(db, 'users', user.uid);
@@ -170,16 +222,59 @@ const App: React.FC = () => {
         token: unit,
         timestamp: serverTimestamp()
       });
+      setIsWalletModalOpen(false);
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}`);
     }
   };
 
   const handleRestake = async () => {
-    if (portfolioBalance < 0.01 || !user) return;
+    if (portfolioBalance < 0.01) return;
     
     const stakeAmount = portfolioBalance * 0.5; // Re-stake 50% of capital
     const unit = activeWallet?.id === 'phantom' ? 'SOL' : 'ETH';
+
+    const appMode = localStorage.getItem('nexus_app_mode') || 'SIMULATION';
+    const isSimMode = activeWallet?.id.startsWith('sim_') || appMode === 'SIMULATION';
+    
+    if (!isSimMode && activeWallet?.id === 'metamask' && (window as any).ethereum) {
+      try {
+        const provider = new BrowserProvider((window as any).ethereum);
+        const signer = await provider.getSigner();
+        const message = `Platforma Nexus AI\n\nStaking (Restake): ${stakeAmount.toFixed(4)} ETH\nOd: ${activeWallet.address}\nOperacja: STAKE_CAPITAL\nNonce: ${Math.floor(Date.now() / 1000)}`;
+        await signer.signMessage(message);
+      } catch (err) {
+        console.error("Transakcja odrzucona:", err);
+        setConnectionError("Odrzucono żądanie podpisu dla stakowania. Operacja anulowana.");
+        setIsWalletModalOpen(true);
+        return;
+      }
+    }
+
+    if (!user) {
+       setPortfolioBalance(prev => prev - stakeAmount);
+       setTransactions(prev => [{
+         id: Math.random().toString(36).substring(7),
+         type: 'STAKE',
+         amount: -stakeAmount,
+         token: unit,
+         time: new Date().toLocaleTimeString()
+       }, ...prev]);
+       setIsWalletModalOpen(false);
+       
+       setTimeout(() => {
+         const reward = stakeAmount * 0.05;
+         setPortfolioBalance(prev => prev + stakeAmount + reward);
+         setTransactions(prev => [{
+           id: Math.random().toString(36).substring(7),
+           type: 'STAKE', // Or some REWARD type
+           amount: stakeAmount + reward,
+           token: unit,
+           time: new Date().toLocaleTimeString()
+         }, ...prev]);
+       }, 5000);
+       return;
+    }
 
     try {
       const userDocRef = doc(db, 'users', user.uid);
@@ -194,6 +289,7 @@ const App: React.FC = () => {
         token: unit,
         timestamp: serverTimestamp()
       });
+      setIsWalletModalOpen(false);
 
       // Simulate rewards after a delay
       setTimeout(async () => {
@@ -561,6 +657,7 @@ const App: React.FC = () => {
         isSyncing={isFirebaseSyncing}
         onLogin={handleGoogleLogin}
         onLogout={handleLogout}
+        onSettingsClick={() => setIsSettingsModalOpen(true)}
       />
 
       {authError && (
@@ -605,6 +702,7 @@ const App: React.FC = () => {
             portfolioBalance={portfolioBalance} 
             onTradeSuccess={addTradeEarnings}
             transactions={transactions}
+            activeWallet={activeWallet}
           />
         ) : (
           <DexDashboard 
@@ -627,6 +725,12 @@ const App: React.FC = () => {
         error={connectionError}
         isValidating={isValidating}
         transactions={transactions}
+      />
+
+      <LiveSettingsModal 
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+        activeWallet={activeWallet}
       />
     </div>
   );
